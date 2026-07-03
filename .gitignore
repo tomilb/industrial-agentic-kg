@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+neo4j_data/
+*.egg-info/
+.pytest_cache/
+reports/output/*.docx
+reports/output/*.pdf
+.DS_Store

@@ -1,0 +1,15 @@
+services:
+  neo4j:
+    image: neo4j:5.24-community
+    container_name: industrial-kg-neo4j
+    ports:
+      - "7474:7474"   # navegador Neo4j (http://localhost:7474)
+      - "7687:7687"   # bolt (driver Python)
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-changeme}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+
+volumes:
+  neo4j_data:
