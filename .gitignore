@@ -8,4 +8,5 @@ neo4j_data/
 .pytest_cache/
 reports/output/*.docx
 reports/output/*.pdf
+data-gen/output/
 .DS_Store
