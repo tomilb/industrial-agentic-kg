@@ -15,7 +15,11 @@ import matplotlib
 matplotlib.use("Agg")  # sin display: imprescindible en un servidor MCP headless
 import matplotlib.pyplot as plt
 from docx import Document
-from docx.shared import Inches
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Inches, Pt, RGBColor
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from neo4j import Driver, GraphDatabase
@@ -471,14 +475,27 @@ def _calcular_kpis_estacion(
     return kpis
 
 
+COLOR_NAVY = "#0B2545"
+COLOR_TEAL = "#12C2A9"
+
+
+def _aplicar_estilo_grafico(ax) -> None:
+    """Estilo visual consistente en las 3 gráficas: sin gridlines de fondo,
+    sin marco superior/derecho."""
+    ax.grid(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+
 def _grafico_produccion_diaria(serie: list[tuple[str, int]], ruta: Path) -> None:
     fechas, unidades = zip(*serie)
     fig, ax = plt.subplots(figsize=(6, 3))
-    ax.plot(fechas, unidades, marker="o", markersize=3, color="#0B2545")
+    ax.plot(fechas, unidades, marker="o", markersize=3, color=COLOR_NAVY)
     ax.set_title("Producción diaria de la línea")
     paso = max(1, len(fechas) // 8)
     ax.set_xticks(list(fechas[::paso]))
     ax.tick_params(axis="x", rotation=45)
+    _aplicar_estilo_grafico(ax)
     fig.tight_layout()
     fig.savefig(ruta, dpi=150)
     plt.close(fig)
@@ -488,9 +505,11 @@ def _grafico_oee_por_estacion(estaciones: list[dict[str, Any]], ruta: Path) -> N
     nombres = [e["estacion_nombre"] for e in estaciones]
     oees = [e["oee"] if e["oee"] is not None else e["oee_actual"] for e in estaciones]
     fig, ax = plt.subplots(figsize=(6, 3))
-    ax.bar(nombres, oees, color="#12C2A9")
+    barras = ax.bar(nombres, oees, color=COLOR_TEAL)
+    ax.bar_label(barras, labels=[_formato_numero_es(v, 2) for v in oees], padding=3)
     ax.set_title("OEE por estación (periodo)")
     ax.tick_params(axis="x", rotation=30)
+    _aplicar_estilo_grafico(ax)
     fig.tight_layout()
     fig.savefig(ruta, dpi=150)
     plt.close(fig)
@@ -509,12 +528,19 @@ def _grafico_evolucion_restriccion(
     ]
     x = list(range(len(nombres)))
     fig, ax = plt.subplots(figsize=(6, 3))
-    ax.bar([i - 0.2 for i in x], anteriores, width=0.4, label="Periodo anterior", color="#8892A0")
-    ax.bar([i + 0.2 for i in x], actuales, width=0.4, label="Periodo actual", color="#0B2545")
+    barras_anteriores = ax.bar(
+        [i - 0.2 for i in x], anteriores, width=0.4, label="Periodo anterior", color=COLOR_TEAL
+    )
+    barras_actuales = ax.bar(
+        [i + 0.2 for i in x], actuales, width=0.4, label="Periodo actual", color=COLOR_NAVY
+    )
+    ax.bar_label(barras_anteriores, labels=[_formato_numero_es(v) for v in anteriores], padding=3)
+    ax.bar_label(barras_actuales, labels=[_formato_numero_es(v) for v in actuales], padding=3)
     ax.set_xticks(x)
     ax.set_xticklabels(nombres, rotation=30)
     ax.set_title("Capacidad efectiva: periodo actual vs anterior")
     ax.legend()
+    _aplicar_estilo_grafico(ax)
     fig.tight_layout()
     fig.savefig(ruta, dpi=150)
     plt.close(fig)
@@ -660,6 +686,130 @@ def _generar_diagnostico_y_recomendaciones(
     return diagnostico, recomendaciones
 
 
+COLOR_TARJETA_FONDO = "EAF0F6"
+
+
+def _rgb_color(color_hex: str) -> RGBColor:
+    color_hex = color_hex.lstrip("#")
+    return RGBColor(int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16))
+
+
+def _sombrear_celda(celda, color_hex: str) -> None:
+    """Aplica un color de fondo a una celda de tabla (python-docx no lo
+    expone en su API de alto nivel; hay que construir el XML a mano)."""
+    color_hex = color_hex.lstrip("#")
+    tcPr = celda._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), color_hex)
+    tcPr.append(shd)
+
+
+def _anadir_campo_pagina(paragraph) -> None:
+    """Inserta el campo de Word "PAGE" (número de página automático), no un
+    texto fijo — python-docx tampoco expone esto en su API de alto nivel."""
+    run = paragraph.add_run()
+    fld_char_inicio = OxmlElement("w:fldChar")
+    fld_char_inicio.set(qn("w:fldCharType"), "begin")
+    instr_text = OxmlElement("w:instrText")
+    instr_text.set(qn("xml:space"), "preserve")
+    instr_text.text = "PAGE"
+    fld_char_fin = OxmlElement("w:fldChar")
+    fld_char_fin.set(qn("w:fldCharType"), "end")
+    run._r.append(fld_char_inicio)
+    run._r.append(instr_text)
+    run._r.append(fld_char_fin)
+
+
+def _agregar_portada(doc: Document, periodo: str, linea_id: str, desde: date, hasta: date) -> None:
+    """Bloque de color navy (tercio superior de la portada) con el logo y el
+    título en blanco superpuestos, en vez del logo suelto + título negro."""
+    tabla = doc.add_table(rows=1, cols=1)
+    tabla.autofit = False
+    celda = tabla.cell(0, 0)
+    celda.width = Inches(6.5)
+    fila = tabla.rows[0]
+    fila.height = Inches(2.3)
+    fila.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+    _sombrear_celda(celda, COLOR_NAVY)
+    celda.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+    parrafo_logo = celda.paragraphs[0]
+    parrafo_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    parrafo_logo.add_run().add_picture(str(RUTA_LOGO_PNG), width=Inches(1.8))
+
+    parrafo_titulo = celda.add_paragraph()
+    parrafo_titulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_titulo = parrafo_titulo.add_run(f"Informe de producción — {periodo.capitalize()}")
+    run_titulo.font.size = Pt(24)
+    run_titulo.font.bold = True
+    run_titulo.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    parrafo_subtitulo = celda.add_paragraph()
+    parrafo_subtitulo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_subtitulo = parrafo_subtitulo.add_run(
+        f"Línea {linea_id} · {desde.isoformat()} a {hasta.isoformat()} · "
+        f"generado el {date.today().isoformat()}"
+    )
+    run_subtitulo.font.size = Pt(11)
+    run_subtitulo.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+
+def _agregar_tarjetas_resumen(
+    doc: Document, unidades_totales: int, oee_medio: float, estacion_restriccion: str
+) -> None:
+    """3 tarjetas en línea (número grande + etiqueta) antes de la tabla de KPIs."""
+    tabla = doc.add_table(rows=1, cols=3)
+    datos = [
+        (_formato_numero_es(unidades_totales), "Unidades producidas"),
+        (_formato_numero_es(oee_medio, 2), "OEE medio de la línea"),
+        (estacion_restriccion, "Estación restricción"),
+    ]
+    for celda, (numero, etiqueta) in zip(tabla.rows[0].cells, datos):
+        _sombrear_celda(celda, COLOR_TARJETA_FONDO)
+        celda.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+        parrafo_numero = celda.paragraphs[0]
+        parrafo_numero.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_numero = parrafo_numero.add_run(numero)
+        run_numero.font.size = Pt(20)
+        run_numero.font.bold = True
+        run_numero.font.color.rgb = _rgb_color(COLOR_NAVY)
+
+        parrafo_etiqueta = celda.add_paragraph()
+        parrafo_etiqueta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_etiqueta = parrafo_etiqueta.add_run(etiqueta)
+        run_etiqueta.font.size = Pt(12)
+        run_etiqueta.font.bold = True
+        run_etiqueta.font.color.rgb = _rgb_color(COLOR_TEAL)
+
+
+def _agregar_separador(doc: Document) -> None:
+    """Espacio + línea divisoria sutil entre un bloque visual (p.ej. las
+    tarjetas de resumen) y el contenido siguiente, para que se lean como
+    bloques separados en vez de continuación de la misma tabla."""
+    parrafo = doc.add_paragraph()
+    parrafo.paragraph_format.space_before = Pt(6)
+    parrafo.paragraph_format.space_after = Pt(12)
+    pPr = parrafo._p.get_or_add_pPr()
+    pBdr = OxmlElement("w:pBdr")
+    borde_inferior = OxmlElement("w:bottom")
+    borde_inferior.set(qn("w:val"), "single")
+    borde_inferior.set(qn("w:sz"), "6")
+    borde_inferior.set(qn("w:space"), "1")
+    borde_inferior.set(qn("w:color"), "CCCCCC")
+    pBdr.append(borde_inferior)
+    pPr.append(pBdr)
+
+
+def _agregar_pie_pagina(doc: Document, linea_id: str) -> None:
+    parrafo = doc.sections[0].footer.paragraphs[0]
+    parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    parrafo.add_run(f"NEXATRON Electronics · Línea {linea_id} · Página ")
+    _anadir_campo_pagina(parrafo)
+
+
 def _construir_documento(
     linea_id: str,
     periodo: str,
@@ -679,12 +829,7 @@ def _construir_documento(
         tmp_path = Path(tmp)
         doc = Document()
 
-        doc.add_picture(str(RUTA_LOGO_PNG), width=Inches(2))
-        doc.add_heading(f"Informe de producción — {periodo}", level=0)
-        doc.add_paragraph(
-            f"Línea {linea_id} · {desde.isoformat()} a {hasta.isoformat()} · "
-            f"generado el {date.today().isoformat()}"
-        )
+        _agregar_portada(doc, periodo, linea_id, desde, hasta)
 
         restriccion = next(e for e in estaciones if e["es_restriccion"])
         unidades_totales = sum(k["unidades_totales"] for k in kpis)
@@ -699,12 +844,18 @@ def _construir_documento(
         )
 
         doc.add_heading("KPIs por estación", level=1)
+        _agregar_tarjetas_resumen(doc, unidades_totales, oee_medio, restriccion["estacion_nombre"])
+        _agregar_separador(doc)
+
         tabla = doc.add_table(rows=1, cols=5)
         tabla.style = "Table Grid"
         for celda, texto in zip(
             tabla.rows[0].cells, ["Estación", "Utilización %", "OEE", "Unidades", "Defectos"]
         ):
-            celda.text = texto
+            _sombrear_celda(celda, COLOR_NAVY)
+            run = celda.paragraphs[0].add_run(texto)
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         for kpi in kpis:
             fila = tabla.add_row().cells
             fila[0].text = kpi["estacion_nombre"]
@@ -735,6 +886,8 @@ def _construir_documento(
         doc.add_heading("Recomendaciones", level=1)
         for r in recomendaciones:
             doc.add_paragraph(r, style="List Bullet")
+
+        _agregar_pie_pagina(doc, linea_id)
 
         ruta = output_dir / f"informe_{periodo}_{hasta.isoformat()}.docx"
         doc.save(str(ruta))

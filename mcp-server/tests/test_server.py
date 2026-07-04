@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document
+from docx.oxml.ns import qn
 
 import server
 
@@ -892,8 +893,13 @@ def test_generar_informe_produce_docx_valido(tmp_path):
     assert "Cuello de botella" in encabezados
     assert "Recomendaciones" in encabezados
 
-    tabla = doc.tables[0]
+    # 3 tablas: portada (1x1), tarjetas de resumen (1x3), KPIs (5 columnas)
+    assert len(doc.tables) == 3
+    tabla_portada = doc.tables[0]
+    tabla_tarjetas = doc.tables[1]
+    tabla = next(t for t in doc.tables if len(t.columns) == 5)
     assert len(tabla.rows) == 3  # cabecera + 2 estaciones
+    assert len(tabla_tarjetas.columns) == 3
 
     todos_los_parrafos = [p.text for p in doc.paragraphs]
     idx_cuello = todos_los_parrafos.index("Cuello de botella")
@@ -905,12 +911,21 @@ def test_generar_informe_produce_docx_valido(tmp_path):
     assert diagnostico_texto not in recomendaciones_texto
 
     texto_completo = "\n".join(todos_los_parrafos)
-    for fila in tabla.rows:
-        texto_completo += "\n" + "\n".join(c.text for c in fila.cells)
+    for tabla_cualquiera in (tabla_portada, tabla_tarjetas, tabla):
+        for fila in tabla_cualquiera.rows:
+            texto_completo += "\n" + "\n".join(c.text for c in fila.cells)
+    texto_completo += "\n" + doc.sections[0].footer.paragraphs[0].text
 
     # nombre legible, nunca el id interno de la máquina
     assert "M3" not in texto_completo
     assert "M4" not in texto_completo
+
+    # pie de página con número de página automático (no texto fijo)
+    pie = doc.sections[0].footer.paragraphs[0]
+    assert "NEXATRON Electronics" in pie.text
+    assert "Línea L1" in pie.text
+    campos_pagina = pie._p.findall(".//" + qn("w:fldChar"))
+    assert len(campos_pagina) == 2  # begin + end del campo PAGE
 
     # números grandes con separador de miles en formato español
     assert "9.500" in texto_completo  # unidades totales E3 (4800+4700)

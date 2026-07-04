@@ -1,0 +1,15 @@
+<svg width="240" height="60" viewBox="0 0 240 60" xmlns="http://www.w3.org/2000/svg">
+  <title>NEXATRON Electronics — logo demo</title>
+  <g>
+    <rect x="4" y="16" width="28" height="28" rx="4" fill="#0B2545"/>
+    <rect x="12" y="24" width="12" height="12" rx="2" fill="#12C2A9"/>
+    <line x1="0" y1="22" x2="4" y2="22" stroke="#0B2545" stroke-width="2"/>
+    <line x1="0" y1="30" x2="4" y2="30" stroke="#0B2545" stroke-width="2"/>
+    <line x1="0" y1="38" x2="4" y2="38" stroke="#0B2545" stroke-width="2"/>
+    <line x1="32" y1="22" x2="36" y2="22" stroke="#0B2545" stroke-width="2"/>
+    <line x1="32" y1="30" x2="36" y2="30" stroke="#0B2545" stroke-width="2"/>
+    <line x1="32" y1="38" x2="36" y2="38" stroke="#0B2545" stroke-width="2"/>
+  </g>
+  <text x="48" y="30" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#0B2545">NEXATRON</text>
+  <text x="48" y="46" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#12C2A9" letter-spacing="2">ELECTRONICS</text>
+</svg>
