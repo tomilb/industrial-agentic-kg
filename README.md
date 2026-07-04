@@ -13,8 +13,18 @@ restricción real de la línea aplicando teoría de restricciones, y calcula
 el retorno de inversión con las cifras que acaba de obtener — todo
 verificable, nada inventado.
 
-![Demo](docs/media/demo-placeholder.png)
-*(añadir captura o GIF de una conversación real en Claude Desktop)*
+![Parte 1: el agente pregunta por los datos financieros que le faltan antes de calcular nada](docs/media/demo-conversacion-1.png)
+![Parte 2: respuesta final con el razonamiento sobre el cuello de botella y las cifras de inversión](docs/media/demo-conversacion-2.png)
+
+*El agente nunca inventa datos que no tiene (pregunta margen, horas y
+horizonte antes de calcular), aplica un supuesto conservador sobre el OEE
+de la máquina nueva sin histórico, y detecta que tras la sustitución el
+nuevo cuello de botella pasa a ser otra estación — 298→413 ud/h, no 298→650.*
+
+![Informe de producción generado automáticamente por el agente](docs/media/demo-informe.png)
+
+*Informe trimestral generado por la tool `generar_informe`, con marca
+corporativa, KPIs y recomendaciones basadas en datos reales del grafo.*
 
 ## El problema que resuelve
 
