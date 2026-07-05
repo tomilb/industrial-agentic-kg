@@ -93,6 +93,23 @@ Detalle completo en [`docs/ESCENARIO.md`](docs/ESCENARIO.md).
 Python 3.11 · Neo4j 5.24 (Docker) · MCP Python SDK · Pydantic ·
 python-docx · matplotlib · pandas/numpy · pytest
 
+## Metodología de desarrollo
+
+Este proyecto se ha construido con **Claude Code** como asistente de
+programación, bajo un flujo de trabajo deliberadamente supervisado: cada
+funcionalidad se planteó primero en modo plan (revisando el diseño antes
+de escribir código), cada cambio de código se revisó en diff antes de
+aprobarlo, y cada herramienta se verificó dos veces — con tests
+automáticos y con comprobación manual contra la base de datos real antes
+de darla por cerrada. El razonamiento y las decisiones de diseño, incluidos
+los errores encontrados y corregidos por el camino, están documentados en
+[`docs/DECISIONS.md`](docs/DECISIONS.md).
+
+Los commits en los que Claude Code ejecutó el `git commit` directamente
+incluyen la coautoría estándar que añade por defecto
+(`Co-Authored-By: Claude`) — se ha dejado así de forma intencionada, como
+registro transparente de en qué partes del desarrollo tuvo intervención
+directa la herramienta.
 ## Instalación y uso
 
 ```bash
