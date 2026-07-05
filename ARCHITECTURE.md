@@ -12,7 +12,7 @@ Datos sintéticos (pandas)
    Neo4j (knowledge graph de planta)
         │
         ▼
-   Servidor MCP (4 tools)
+   Servidor MCP (5 tools)
         │
         ▼
 Agente (Claude Desktop / API) ── informe (Skills)
@@ -57,7 +57,7 @@ del agente sobre optimización tengan una base real que verificar.
 | `paradas_min` | float | tiempo parado |
 | `defectos` | int | |
 
-## Servidor MCP — 4 tools
+## Servidor MCP — 5 tools
 
 Todas las tools devuelven JSON validado con Pydantic. Contrato de error común:
 `{"error": str, "detalle": str | None}`.
@@ -154,6 +154,42 @@ Todas las tools devuelven JSON validado con Pydantic. Contrato de error común:
     diagnóstico, recomendaciones, gráficas) usan formato español: punto
     como separador de miles, coma como separador decimal (p.ej.
     "2.234.516", "16.019%").
+
+### 5. `consultar_manual_tecnico`
+- **Entrada**: `maquina_id` (str, `Maquina` o `MaquinaCandidata`),
+  `pregunta` (str, lenguaje natural)
+- **Salida**: `{"maquina_id": str, "chunks": [{"seccion": str, "texto": str,
+  "score": float}, ...]}`, o el contrato de error común si no hay manual
+  cargado para esa máquina.
+- **Esquema**: nodos `(:ManualChunk {id, maquina_id, seccion, texto,
+  embedding})`, relacionados `(:Maquina)-[:TIENE_MANUAL]->(:ManualChunk)`
+  o `(:MaquinaCandidata)-[:TIENE_MANUAL]->(:ManualChunk)` según
+  corresponda. Cargados por `graph/load_manuals.py` (separado de
+  `load_data.py`), idempotente vía `MERGE` sobre un id determinista
+  (`{maquina_id}-{slug(seccion)}`).
+- **Implementación**: RAG con el **índice vectorial nativo de Neo4j**
+  (`db.index.vector.queryNodes`), sin base de datos vectorial aparte.
+  Embeddings con `sentence-transformers`
+  (`paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensiones, local — sin
+  API key ni red tras la primera descarga) — el mismo modelo se usa para
+  indexar los manuales y para embeber la pregunta en tiempo de consulta.
+  Chunking por sección (cada `##` de `manuales/*.md` es un chunk), no por
+  documento completo — ver `docs/DECISIONS.md` para el razonamiento. Se
+  piden más candidatos de los que hacen falta al índice vectorial
+  (`db.index.vector.queryNodes` no filtra por `maquina_id`) y se filtra
+  después en Cypher, para no perder chunks relevantes de la máquina
+  pedida que no entrarían en un top-k global pequeño.
+- **Diagnóstico de causa raíz**: para preguntas de causa raíz de un
+  defecto o incidencia (no solo "qué mantenimiento lleva X"), el
+  docstring de la tool indica al agente que conviene consultar también
+  el manual de la estación **inmediatamente anterior** en la línea, no
+  solo la estación donde se observa el síntoma — muchas incidencias se
+  documentan como manifestándose aguas abajo de su causa real. El propio
+  docstring sugiere usar `consultar_grafo(topologia_linea)` primero para
+  identificar esa estación anterior, y hacer una segunda llamada a
+  `consultar_manual_tecnico` con su `maquina_id`. Es una indicación de
+  uso en el texto que lee el agente, no un cambio de contrato: la entrada/
+  salida y el filtro `WHERE node.maquina_id` de la tool no cambian.
 
 ## Flujo de una pregunta típica
 

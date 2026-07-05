@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from neo4j import Driver, GraphDatabase
 from pydantic import BaseModel, Field, ValidationError
+from sentence_transformers import SentenceTransformer
 
 # --- Conexión a Neo4j -------------------------------------------------------
 
@@ -114,6 +115,17 @@ class DetectarCuelloBotellaResultado(BaseModel):
 
 class GenerarInformeResultado(BaseModel):
     ruta: str
+
+
+class ManualChunkResultado(BaseModel):
+    seccion: str
+    texto: str
+    score: float
+
+
+class ConsultarManualResultado(BaseModel):
+    maquina_id: str
+    chunks: list[ManualChunkResultado]
 
 
 # --- Funciones de consulta (puras: reciben el driver, testables con uno falso) --
@@ -974,6 +986,68 @@ def _ejecutar_generar_informe(driver: Driver, periodo: str, fecha_referencia: st
         return ErrorMCP(error="Error al generar el informe", detalle=str(e)).model_dump()
 
 
+# --- Consulta de manuales técnicos (RAG, índice vectorial nativo de Neo4j) ---
+
+# Debe coincidir exactamente con MODELO_EMBEDDINGS de graph/load_manuals.py
+# (mismo modelo al indexar y al embeber la pregunta) y con el
+# vector.dimensions de graph/schema.cypher (384).
+MODELO_EMBEDDINGS = "paraphrase-multilingual-MiniLM-L12-v2"
+
+# db.index.vector.queryNodes no conoce maquina_id: devuelve el top-k
+# GLOBAL del índice. Pedimos más candidatos de los que hacen falta
+# (> 40 chunks totales del corpus actual) y filtramos por maquina_id
+# después, para no perder chunks relevantes de la máquina pedida que no
+# entrarían en un top-k pequeño pedido directamente al índice.
+K_CANDIDATOS_VECTOR = 50
+TOP_N_CHUNKS = 3
+
+
+def _consultar_manual_tecnico(
+    driver: Driver, modelo: SentenceTransformer, maquina_id: str, pregunta: str
+) -> ConsultarManualResultado:
+    if not maquina_id:
+        raise ValueError("Falta el parámetro 'maquina_id'")
+    if not pregunta:
+        raise ValueError("Falta el parámetro 'pregunta'")
+
+    embedding = modelo.encode(pregunta, normalize_embeddings=True).tolist()
+
+    with driver.session() as session:
+        rows = session.run(
+            """
+            CALL db.index.vector.queryNodes('manual_chunk_embedding_idx', $k, $embedding)
+            YIELD node, score
+            WHERE node.maquina_id = $maquina_id
+            RETURN node.seccion AS seccion, node.texto AS texto, score
+            ORDER BY score DESC
+            LIMIT $top_n
+            """,
+            k=K_CANDIDATOS_VECTOR,
+            embedding=embedding,
+            maquina_id=maquina_id,
+            top_n=TOP_N_CHUNKS,
+        ).data()
+
+    if not rows:
+        raise ValueError(f"No hay manual técnico cargado para la máquina {maquina_id!r}")
+
+    return ConsultarManualResultado(
+        maquina_id=maquina_id,
+        chunks=[ManualChunkResultado(**row) for row in rows],
+    )
+
+
+def _ejecutar_consulta_manual(
+    driver: Driver, modelo: SentenceTransformer, maquina_id: str, pregunta: str
+) -> dict:
+    try:
+        return _consultar_manual_tecnico(driver, modelo, maquina_id, pregunta).model_dump()
+    except ValueError as e:
+        return ErrorMCP(error=str(e)).model_dump()
+    except Exception as e:
+        return ErrorMCP(error="Error al consultar el manual técnico", detalle=str(e)).model_dump()
+
+
 # --- Servidor MCP ------------------------------------------------------------
 
 mcp = FastMCP("industrial-kg")
@@ -991,6 +1065,23 @@ def _get_shared_driver() -> Driver:
     if _driver is None:
         _driver = get_driver()
     return _driver
+
+
+_modelo_embeddings: SentenceTransformer | None = None
+
+
+def _get_shared_modelo_embeddings() -> SentenceTransformer:
+    """Carga el modelo de embeddings en la primera tool call, no al
+    importar el módulo — igual que _get_shared_driver: los tests no
+    necesitan el modelo descargado, y arrancar el servidor no se retrasa
+    por esto. Coste aceptado: la primera llamada real a
+    consultar_manual_tecnico tarda unos segundos más (carga desde caché
+    local) que las siguientes.
+    """
+    global _modelo_embeddings
+    if _modelo_embeddings is None:
+        _modelo_embeddings = SentenceTransformer(MODELO_EMBEDDINGS)
+    return _modelo_embeddings
 
 
 @mcp.tool()
@@ -1081,6 +1172,29 @@ def generar_informe(periodo: str, fecha_referencia: str | None = None) -> dict:
     reports/output/, o {"error", "detalle"} si falla."""
     ref = fecha_referencia or date.today().isoformat()
     return _ejecutar_generar_informe(_get_shared_driver(), periodo, ref)
+
+
+@mcp.tool()
+def consultar_manual_tecnico(maquina_id: str, pregunta: str) -> dict:
+    """Busca en el manual técnico de una máquina o candidata (RAG sobre el
+    índice vectorial nativo de Neo4j) los fragmentos más relevantes para
+    una pregunta en lenguaje natural. Usar para preguntas de
+    mantenimiento, seguridad, instalación o incidencias conocidas — no
+    para specs numéricas (eso es consultar_grafo). Devuelve
+    {"maquina_id": str, "chunks": [{"seccion", "texto", "score"}, ...]}
+    o {"error", "detalle"} si no hay manual cargado para esa máquina.
+
+    Para diagnóstico de causa raíz de un defecto o incidencia (no solo
+    "qué mantenimiento lleva X"): conviene consultar también el manual de
+    la estación inmediatamente ANTERIOR en la línea, no solo la estación
+    donde se observa el síntoma — muchas incidencias se documentan como
+    manifestándose aguas abajo de su causa real. Usar
+    consultar_grafo(topologia_linea) primero para identificar cuál es esa
+    estación anterior, y hacer una segunda llamada a
+    consultar_manual_tecnico con su maquina_id."""
+    return _ejecutar_consulta_manual(
+        _get_shared_driver(), _get_shared_modelo_embeddings(), maquina_id, pregunta
+    )
 
 
 if __name__ == "__main__":
