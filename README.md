@@ -1,5 +1,7 @@
 # Industrial Agentic Knowledge Graph
 
+[![Tests](https://github.com/tomilb/industrial-agentic-kg/actions/workflows/tests.yml/badge.svg)](https://github.com/tomilb/industrial-agentic-kg/actions/workflows/tests.yml)
+
 Un agente conversacional que razona sobre el estado real de una línea de
 producción industrial — modelada como un grafo de conocimiento en Neo4j —
 para responder preguntas de inversión, optimización y detección de cuellos
