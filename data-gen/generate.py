@@ -297,9 +297,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def generar_dataset(
-    n_estaciones: int, n_dias: int, seed: int
-) -> dict[str, list[dict[str, Any]]]:
+def generar_dataset(n_estaciones: int, n_dias: int, seed: int) -> dict[str, list[dict[str, Any]]]:
     if not 1 <= n_estaciones <= len(ESTACIONES):
         raise ValueError(
             f"--stations debe estar entre 1 y {len(ESTACIONES)}, recibido {n_estaciones}"

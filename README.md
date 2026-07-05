@@ -110,6 +110,7 @@ incluyen la coautoría estándar que añade por defecto
 (`Co-Authored-By: Claude`) — se ha dejado así de forma intencionada, como
 registro transparente de en qué partes del desarrollo tuvo intervención
 directa la herramienta.
+
 ## Instalación y uso
 
 ```bash
@@ -168,6 +169,14 @@ y prueba con una pregunta real en una conversación nueva.
   al cliente (protocolo estándar por stdio); en un despliegue real en
   empresa se expondría de forma remota tras autenticación, consumido por
   una interfaz propia en vez de Claude Desktop.
+- **Modelo financiero simplificado.** La tasa de descuento del VAN es fija
+  (10% anual) y no ajustable por escenario; el informe automático usa un
+  margen por unidad y un horizonte de evaluación fijos como constantes
+  (no derivados del grafo), mientras que en la conversación con el agente
+  esos mismos valores se piden explícitamente al usuario. El cálculo no
+  incluye coste de instalación, parada de producción durante el cambio de
+  máquina, ni ajuste de riesgo — válido para demostrar el razonamiento,
+  no para una decisión de inversión real sin revisión adicional.
 
 ## Roadmap
 

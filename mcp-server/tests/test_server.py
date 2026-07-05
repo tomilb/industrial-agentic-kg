@@ -2,11 +2,9 @@ import re
 from pathlib import Path
 
 import pytest
+import server
 from docx import Document
 from docx.oxml.ns import qn
-
-import server
-
 
 # --- Driver / sesión falsos (sin Neo4j real) --------------------------------
 
@@ -247,9 +245,7 @@ def test_calcular_financiero_caso_feliz():
     ganancia_diaria = 50 * 10 * 10  # 5000
     payback_esperado = 300_000 / (ganancia_diaria * 30)
     roi_esperado = ((ganancia_diaria * 365 * 3) - 300_000) / 300_000 * 100
-    van_esperado = -300_000 + sum(
-        (ganancia_diaria * 365) / (1.10**anio) for anio in range(1, 4)
-    )
+    van_esperado = -300_000 + sum((ganancia_diaria * 365) / (1.10**anio) for anio in range(1, 4))
 
     assert resultado.payback_meses == pytest.approx(payback_esperado)
     assert resultado.roi_pct == pytest.approx(roi_esperado)
@@ -578,9 +574,7 @@ def test_detectar_cuello_botella_desde_posterior_a_hasta_devuelve_error_estructu
 def test_detectar_cuello_botella_linea_inexistente_devuelve_error_estructurado():
     driver = _FakeDriver([_FakeResult(data_valor=[])])
 
-    resultado = server._ejecutar_deteccion_cuello_botella(
-        driver, "L99", "2026-01-01", "2026-01-31"
-    )
+    resultado = server._ejecutar_deteccion_cuello_botella(driver, "L99", "2026-01-01", "2026-01-31")
 
     assert "No existe" in resultado["error"]
 

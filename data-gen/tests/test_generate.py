@@ -1,7 +1,6 @@
+import generate
 import pandas as pd
 import pytest
-
-import generate
 
 SEED = 123
 N_DIAS = 180

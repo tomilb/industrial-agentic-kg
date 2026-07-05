@@ -1,6 +1,5 @@
-import pandas as pd
-
 import load_data
+import pandas as pd
 
 
 def test_precede_a_deriva_pares_consecutivos_por_orden():

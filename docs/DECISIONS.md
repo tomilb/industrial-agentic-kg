@@ -342,3 +342,36 @@ verificación: el driver de Neo4j devuelve `RegistroProduccion.fecha` como
 string directamente en el Cypher (`fecha: toString(r.fecha)`) en vez de
 `.fecha`, para no depender de que cada consumidor Python haga la
 conversión.
+
+---
+
+## 2026-07 — `python_version = "3.12"` en mypy, distinto del target real (3.11)
+
+**Motivo**: al configurar `[tool.mypy]` con `python_version = "3.11"`
+(coherente con el resto del proyecto), mypy fallaba de entrada al
+intentar analizar los stubs de `numpy` 2.5:
+`error: Type statement is only supported in Python 3.12 and greater`.
+Los stubs de numpy usan sintaxis PEP 695 (`type X = ...`), y mypy exige
+que el `python_version` configurado sea ≥3.12 para poder *parsear* esa
+sintaxis, incluso dentro de un fichero `.pyi` de una dependencia — no
+tiene relación con qué sintaxis usa nuestro propio código.
+
+**Decisión**: fijar `python_version = "3.12"` **solo en `[tool.mypy]`**.
+`ruff`/`black` se quedan en `target-version = "py311"` (que es lo que
+realmente importa para el estilo/estructura de nuestro código), y el
+Python real de ejecución del proyecto sigue siendo 3.11 (`requirements.txt`,
+`docs/MCP_CLIENT_CONFIG.md`, el job `tests` de CI). Este cambio no
+habilita ni permite usar sintaxis exclusiva de 3.12 en el código del
+repo — mypy seguiría marcando como fuera de alcance cualquier construcción
+así si alguna vez se colara, porque nuestro propio código nunca las usa;
+el ajuste solo afecta a cómo mypy interpreta los `.pyi` de terceros que
+importamos.
+
+**Red de seguridad real**: el job `tests` del workflow de CI
+(`.github/workflows/tests.yml`) instala Python 3.11 explícitamente y
+ejecuta la suite completa ahí — si algún día se introdujera sin querer
+sintaxis incompatible con 3.11 en el código del proyecto, ese job (no
+mypy) sería el que lo detectaría al fallar la importación/ejecución real
+bajo el intérprete correcto. `mypy` con `python_version = "3.12"` es una
+concesión de compatibilidad de parseo de stubs, no una relajación del
+target real del proyecto.

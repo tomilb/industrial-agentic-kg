@@ -6,15 +6,17 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Callable
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import matplotlib
 
 matplotlib.use("Agg")  # sin display: imprescindible en un servidor MCP headless
 import matplotlib.pyplot as plt
 from docx import Document
+from docx.document import Document as DocxDocument
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
@@ -24,7 +26,6 @@ from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from neo4j import Driver, GraphDatabase
 from pydantic import BaseModel, Field, ValidationError
-
 
 # --- Conexión a Neo4j -------------------------------------------------------
 
@@ -268,8 +269,10 @@ def _calcular_financiero(entrada: CalcularFinancieroInput) -> ResultadoFinancier
     )
 
     roi_pct = (
-        (ganancia_diaria * 365 * entrada.horizonte_anos) - entrada.coste_inversion
-    ) / entrada.coste_inversion * 100
+        ((ganancia_diaria * 365 * entrada.horizonte_anos) - entrada.coste_inversion)
+        / entrada.coste_inversion
+        * 100
+    )
 
     flujo_anual = ganancia_diaria * 365
     van = -entrada.coste_inversion + sum(
@@ -320,8 +323,7 @@ def _calcular_oee_y_utilizacion(
     tiempo_disponible_min = HORAS_OPERACION_DIA * 60
     oees = [r["unidades"] / (capacidad_ud_h * HORAS_OPERACION_DIA) for r in registros]
     utilizaciones = [
-        (tiempo_disponible_min - r["paradas_min"]) / tiempo_disponible_min * 100
-        for r in registros
+        (tiempo_disponible_min - r["paradas_min"]) / tiempo_disponible_min * 100 for r in registros
     ]
     return sum(oees) / len(oees), sum(utilizaciones) / len(utilizaciones)
 
@@ -353,7 +355,8 @@ def _consultar_rows_cuello_botella(
             WHERE r.fecha >= date($desde) AND r.fecha <= date($hasta)
             RETURN e.id AS estacion_id, e.nombre AS estacion_nombre, m.id AS maquina_id,
                    m.capacidad_ud_h AS capacidad_ud_h, m.oee_actual AS oee_actual,
-                   collect(r{.unidades, .paradas_min, .defectos, fecha: toString(r.fecha)}) AS registros
+                   collect(r{.unidades, .paradas_min, .defectos,
+                             fecha: toString(r.fecha)}) AS registros
             """,
             linea_id=linea_id,
             desde=desde,
@@ -417,9 +420,7 @@ def _ejecutar_deteccion_cuello_botella(
     except ValueError as e:
         return ErrorMCP(error=str(e)).model_dump()
     except Exception as e:
-        return ErrorMCP(
-            error="Error al detectar el cuello de botella", detalle=str(e)
-        ).model_dump()
+        return ErrorMCP(error="Error al detectar el cuello de botella", detalle=str(e)).model_dump()
 
 
 # --- Generación de informe ---------------------------------------------------
@@ -427,7 +428,9 @@ def _ejecutar_deteccion_cuello_botella(
 MARGEN_POR_UNIDAD_EUR = 12.0  # ver docs/ESCENARIO.md, fijo para el demo
 HORIZONTE_ANOS_RECOMENDACION = 3  # ver docs/EVAL_QUESTIONS.md ("ROI a 3 años")
 PERIODO_DIAS = {"mensual": 30, "trimestral": 91}
-RUTA_LOGO_PNG = Path(__file__).parent.parent / "skills" / "informe-corporativo" / "assets" / "logo.png"
+RUTA_LOGO_PNG = (
+    Path(__file__).parent.parent / "skills" / "informe-corporativo" / "assets" / "logo.png"
+)
 RUTA_INFORMES_DIR = Path(__file__).parent.parent / "reports" / "output"
 
 
@@ -488,7 +491,7 @@ def _aplicar_estilo_grafico(ax) -> None:
 
 
 def _grafico_produccion_diaria(serie: list[tuple[str, int]], ruta: Path) -> None:
-    fechas, unidades = zip(*serie)
+    fechas, unidades = zip(*serie, strict=True)
     fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(fechas, unidades, marker="o", markersize=3, color=COLOR_NAVY)
     ax.set_title("Producción diaria de la línea")
@@ -551,7 +554,7 @@ def _formato_numero_es(numero: float, decimales: int = 0) -> str:
     coma como separador decimal (p.ej. 2234516 -> "2.234.516", 0.1 -> "0,1")."""
     signo = "-" if numero < 0 else ""
     entero, _, decimal = f"{abs(numero):.{decimales}f}".partition(".")
-    grupos = []
+    grupos: list[str] = []
     while len(entero) > 3:
         grupos.insert(0, entero[-3:])
         entero = entero[:-3]
@@ -606,8 +609,8 @@ def _generar_diagnostico_y_recomendaciones(
             recomendaciones.append(
                 f"La restricción ha cambiado respecto al periodo anterior: era "
                 f"{restriccion_anterior['estacion_nombre']} "
-                f"({_formato_numero_es(restriccion_anterior['capacidad_efectiva'])} ud/h) y ahora es "
-                f"{restriccion['estacion_nombre']} "
+                f"({_formato_numero_es(restriccion_anterior['capacidad_efectiva'])} ud/h) "
+                f"y ahora es {restriccion['estacion_nombre']} "
                 f"({_formato_numero_es(restriccion['capacidad_efectiva'])} ud/h)."
             )
         else:
@@ -628,7 +631,9 @@ def _generar_diagnostico_y_recomendaciones(
                 f"{_formato_numero_es(restriccion['capacidad_efectiva'])} ud/h)."
             )
 
-    candidatos = _consultar_candidatos_sustitucion(driver, {"maquina_id": restriccion["maquina_id"]})
+    candidatos = _consultar_candidatos_sustitucion(
+        driver, {"maquina_id": restriccion["maquina_id"]}
+    )
     if candidatos.candidatas:
         candidata = candidatos.candidatas[0]
         maquina_actual_nombre = candidatos.maquina_actual.nombre
@@ -654,6 +659,15 @@ def _generar_diagnostico_y_recomendaciones(
             )
         )
         if resultado_financiero.payback_meses is not None:
+            # candidata proviene siempre de un nodo MaquinaCandidata real (ver
+            # Cypher de _consultar_candidatos_sustitucion), y data-gen/generate.py
+            # rellena mejora_capacidad_pct para las 5 candidatas del dataset sin
+            # excepción — solo sería None si se cargara una MaquinaCandidata sin
+            # ese dato, cosa que el generador actual nunca hace.
+            assert candidata.mejora_capacidad_pct is not None, (
+                "mejora_capacidad_pct no debería ser None para una MaquinaCandidata "
+                "real del grafo"
+            )
             recomendaciones.append(
                 f"Sustituir {maquina_actual_nombre} por {candidata.nombre} "
                 f"(+{_formato_numero_es(candidata.mejora_capacidad_pct)}% de capacidad nominal) "
@@ -679,8 +693,9 @@ def _generar_diagnostico_y_recomendaciones(
             f"(oee={_formato_numero_es(restriccion['oee'], 2)}) está "
             f"{_formato_numero_es((restriccion['oee_actual'] - restriccion['oee']) * 100)} puntos "
             f"por debajo de su ficha técnica "
-            f"(oee_actual={_formato_numero_es(restriccion['oee_actual'], 2)}); antes de invertir en "
-            f"sustitución conviene revisar paradas/mantenimiento de esta estación."
+            f"(oee_actual={_formato_numero_es(restriccion['oee_actual'], 2)}); "
+            f"antes de invertir en sustitución conviene revisar "
+            f"paradas/mantenimiento de esta estación."
         )
 
     return diagnostico, recomendaciones
@@ -722,7 +737,9 @@ def _anadir_campo_pagina(paragraph) -> None:
     run._r.append(fld_char_fin)
 
 
-def _agregar_portada(doc: Document, periodo: str, linea_id: str, desde: date, hasta: date) -> None:
+def _agregar_portada(
+    doc: DocxDocument, periodo: str, linea_id: str, desde: date, hasta: date
+) -> None:
     """Bloque de color navy (tercio superior de la portada) con el logo y el
     título en blanco superpuestos, en vez del logo suelto + título negro."""
     tabla = doc.add_table(rows=1, cols=1)
@@ -757,7 +774,7 @@ def _agregar_portada(doc: Document, periodo: str, linea_id: str, desde: date, ha
 
 
 def _agregar_tarjetas_resumen(
-    doc: Document, unidades_totales: int, oee_medio: float, estacion_restriccion: str
+    doc: DocxDocument, unidades_totales: int, oee_medio: float, estacion_restriccion: str
 ) -> None:
     """3 tarjetas en línea (número grande + etiqueta) antes de la tabla de KPIs."""
     tabla = doc.add_table(rows=1, cols=3)
@@ -766,7 +783,7 @@ def _agregar_tarjetas_resumen(
         (_formato_numero_es(oee_medio, 2), "OEE medio de la línea"),
         (estacion_restriccion, "Estación restricción"),
     ]
-    for celda, (numero, etiqueta) in zip(tabla.rows[0].cells, datos):
+    for celda, (numero, etiqueta) in zip(tabla.rows[0].cells, datos, strict=True):
         _sombrear_celda(celda, COLOR_TARJETA_FONDO)
         celda.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
@@ -785,7 +802,7 @@ def _agregar_tarjetas_resumen(
         run_etiqueta.font.color.rgb = _rgb_color(COLOR_TEAL)
 
 
-def _agregar_separador(doc: Document) -> None:
+def _agregar_separador(doc: DocxDocument) -> None:
     """Espacio + línea divisoria sutil entre un bloque visual (p.ej. las
     tarjetas de resumen) y el contenido siguiente, para que se lean como
     bloques separados en vez de continuación de la misma tabla."""
@@ -803,7 +820,7 @@ def _agregar_separador(doc: Document) -> None:
     pPr.append(pBdr)
 
 
-def _agregar_pie_pagina(doc: Document, linea_id: str) -> None:
+def _agregar_pie_pagina(doc: DocxDocument, linea_id: str) -> None:
     parrafo = doc.sections[0].footer.paragraphs[0]
     parrafo.alignment = WD_ALIGN_PARAGRAPH.CENTER
     parrafo.add_run(f"NEXATRON Electronics · Línea {linea_id} · Página ")
@@ -833,7 +850,9 @@ def _construir_documento(
 
         restriccion = next(e for e in estaciones if e["es_restriccion"])
         unidades_totales = sum(k["unidades_totales"] for k in kpis)
-        oee_medio = sum(e["oee"] if e["oee"] is not None else e["oee_actual"] for e in estaciones) / len(estaciones)
+        oee_medio = sum(
+            e["oee"] if e["oee"] is not None else e["oee_actual"] for e in estaciones
+        ) / len(estaciones)
 
         doc.add_heading("Resumen ejecutivo", level=1)
         doc.add_paragraph(
@@ -850,7 +869,9 @@ def _construir_documento(
         tabla = doc.add_table(rows=1, cols=5)
         tabla.style = "Table Grid"
         for celda, texto in zip(
-            tabla.rows[0].cells, ["Estación", "Utilización %", "OEE", "Unidades", "Defectos"]
+            tabla.rows[0].cells,
+            ["Estación", "Utilización %", "OEE", "Unidades", "Defectos"],
+            strict=True,
         ):
             _sombrear_celda(celda, COLOR_NAVY)
             run = celda.paragraphs[0].add_run(texto)
@@ -864,9 +885,7 @@ def _construir_documento(
                 if kpi["utilizacion_pct"] is not None
                 else "N/D"
             )
-            fila[2].text = (
-                _formato_numero_es(kpi["oee"], 2) if kpi["oee"] is not None else "N/D"
-            )
+            fila[2].text = _formato_numero_es(kpi["oee"], 2) if kpi["oee"] is not None else "N/D"
             fila[3].text = _formato_numero_es(kpi["unidades_totales"])
             fila[4].text = _formato_numero_es(kpi["defectos_totales"])
 

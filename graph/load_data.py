@@ -60,7 +60,9 @@ def derivar_pares_precede_a(estaciones_rows: list[dict]) -> list[dict]:
     ordenadas = sorted(estaciones_rows, key=lambda r: r["orden"])
     return [
         {"actual": actual["id"], "siguiente": siguiente["id"]}
-        for actual, siguiente in zip(ordenadas, ordenadas[1:])
+        # strict=False a propósito: ordenadas y ordenadas[1:] difieren en
+        # longitud por diseño (pares consecutivos), no es un bug.
+        for actual, siguiente in zip(ordenadas, ordenadas[1:], strict=False)
     ]
 
 
