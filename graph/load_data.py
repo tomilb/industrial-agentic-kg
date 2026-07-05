@@ -128,7 +128,8 @@ def cargar_maquinas(driver: Driver, rows: list[dict]) -> None:
                 m.oee_actual = row.oee_actual,
                 m.coste_mantenimiento_anual = row.coste_mantenimiento_anual,
                 m.consumo_kwh = row.consumo_kwh,
-                m.vida_util_anos = row.vida_util_anos
+                m.vida_util_anos = row.vida_util_anos,
+                m.anos_en_servicio = row.anos_en_servicio
             MERGE (e)-[:OPERA]->(m)
             """,
             rows=rows,

@@ -51,6 +51,7 @@ class MaquinaSpecs(BaseModel):
     vida_util_anos: int
     oee_actual: float | None = None
     mejora_capacidad_pct: float | None = None
+    anos_en_servicio: int | None = None  # solo en Maquina, no en MaquinaCandidata
 
 
 class SpecsMaquinaResultado(BaseModel):

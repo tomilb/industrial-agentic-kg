@@ -56,6 +56,7 @@ ESTACIONES: list[dict[str, Any]] = [
             "coste_mantenimiento_anual": 12_000.0,
             "consumo_kwh": 8.0,
             "vida_util_anos": 10,
+            "anos_en_servicio": 4,
         },
         "candidatas": [
             {
@@ -83,6 +84,7 @@ ESTACIONES: list[dict[str, Any]] = [
             "coste_mantenimiento_anual": 6_000.0,
             "consumo_kwh": 15.0,
             "vida_util_anos": 12,
+            "anos_en_servicio": 6,
         },
         "candidatas": [
             {
@@ -110,6 +112,7 @@ ESTACIONES: list[dict[str, Any]] = [
             "coste_mantenimiento_anual": 5_000.0,
             "consumo_kwh": 3.0,
             "vida_util_anos": 8,
+            "anos_en_servicio": 6,
         },
         "candidatas": [
             {
@@ -137,6 +140,7 @@ ESTACIONES: list[dict[str, Any]] = [
             "coste_mantenimiento_anual": 4_000.0,
             "consumo_kwh": 2.0,
             "vida_util_anos": 10,
+            "anos_en_servicio": 3,
         },
         "candidatas": [
             {
@@ -164,6 +168,7 @@ ESTACIONES: list[dict[str, Any]] = [
             "coste_mantenimiento_anual": 5_000.0,
             "consumo_kwh": 4.0,
             "vida_util_anos": 10,
+            "anos_en_servicio": 5,
         },
         "candidatas": [
             {

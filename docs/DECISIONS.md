@@ -375,3 +375,27 @@ mypy) sería el que lo detectaría al fallar la importación/ejecución real
 bajo el intérprete correcto. `mypy` con `python_version = "3.12"` es una
 concesión de compatibilidad de parseo de stubs, no una relajación del
 target real del proyecto.
+
+---
+
+## 2026-07 — `anos_en_servicio` como propiedad del grafo, no como dato cualitativo en manuales
+
+**Decisión**: `anos_en_servicio` (int, solo en `Maquina`) vive como
+propiedad del nodo en Neo4j, poblada por `data-gen/generate.py` con
+valores fijos por máquina (ver `docs/ESCENARIO.md`), y accesible ya vía
+`consultar_grafo(specs_maquina)` sin ninguna tool nueva (las consultas de
+`_consultar_specs_maquina`/`_consultar_candidatos_sustitucion` ya
+proyectan todas las propiedades del nodo con `m{.*}`/`c{.*}`, así que
+basta con añadir el campo al modelo Pydantic `MaquinaSpecs`).
+
+**Motivo**: es un número que alimentaría cálculos futuros (vida útil
+restante = `vida_util_anos - anos_en_servicio`, por ejemplo, para razonar
+"a esta máquina le quedan N años antes de sustituirla igualmente" al
+margen de si sigue siendo la restricción) — dato cuantitativo que el
+agente necesita **citar y operar sobre él**, no una explicación
+cualitativa de contexto que baste con tener en un manual técnico o en la
+documentación. La regla general de este proyecto es que todo lo que el
+agente deba usar para razonar o calcular vive en el grafo, consultable de
+forma estructurada — los manuales/documentación son para el razonamiento
+humano sobre el propio proyecto, no para que el agente los lea en tiempo
+de ejecución.

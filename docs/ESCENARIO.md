@@ -40,3 +40,13 @@ Pick & Place: 8 kWh · Reflow: 15 kWh · AOI: 3 kWh · Cobot: 2 kWh · Test: 4 k
 ## Vida útil (`vida_util_anos`)
 
 Pick & Place: 10 · Reflow: 12 · AOI: 8 · Cobot: 10 · Test: 10
+
+## Años en servicio (`anos_en_servicio`)
+
+Solo para la máquina actual instalada (`Maquina`), no aplica a
+`MaquinaCandidata` — es un hecho de la unidad concreta ya instalada en la
+línea (cuánto lleva en marcha), no una característica del modelo:
+
+M1 (Pick & Place gama media): 4 · M2 (Horno reflow estándar): 6 ·
+M3 (AOI de gama básica): 6 · M4 (Cobot de ensamblaje): 3 ·
+M5 (Tester funcional simple): 5

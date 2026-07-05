@@ -46,6 +46,7 @@ del agente sobre optimización tengan una base real que verificar.
 | `consumo_kwh` | float | por hora de operación |
 | `vida_util_anos` | int | |
 | `mejora_capacidad_pct` | float | solo en `MaquinaCandidata`, vs. la máquina que sustituye |
+| `anos_en_servicio` | int | solo en `Maquina` — años que esa unidad concreta lleva instalada, no una característica del modelo (ver `docs/ESCENARIO.md`) |
 
 **RegistroProduccion**
 | Propiedad | Tipo | Descripción |
