@@ -38,7 +38,8 @@ features extra. Alcance de MVP: 2-3 semanas.
 - Cargar esquema y datos: `python graph/load_data.py`
 - Generar datos sintéticos: `python data-gen/generate.py --stations 5 --days 180`
 - Arrancar servidor MCP: `python mcp-server/server.py`
-- Tests: `pytest mcp-server/tests`
+- Tests: `pytest mcp-server/tests --ignore=mcp-server/tests/test_integration_neo4j.py`
+- Tests de integración (requieren Docker corriendo): `pytest mcp-server/tests/test_integration_neo4j.py -m integration`
 
 ## Convenciones
 

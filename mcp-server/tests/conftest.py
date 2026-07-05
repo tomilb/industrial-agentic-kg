@@ -1,4 +1,6 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_AQUI = Path(__file__).resolve()
+sys.path.insert(0, str(_AQUI.parent.parent))  # mcp-server/ -> import server
+sys.path.insert(0, str(_AQUI.parent.parent.parent / "graph"))  # graph/ -> import load_data
