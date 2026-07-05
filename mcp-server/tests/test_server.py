@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -823,7 +824,11 @@ def test_generar_recomendaciones_cambio_de_restriccion_lo_indica():
     assert "Estación A" in recomendaciones[0]
 
 
-def test_generar_informe_produce_docx_valido(tmp_path):
+def _construir_datos_informe_fixture() -> tuple[list[dict], list[dict]]:
+    """rows_actual/rows_anterior para 2 estaciones (E3/M3=AOI, restricción
+    con candidata C3; E4/M4=Ensamblaje), reutilizados por los tests de
+    generar_informe que necesitan un docx completo generado de extremo a
+    extremo con un driver falso."""
     rows_actual = [
         {
             "estacion_id": "E3",
@@ -870,16 +875,41 @@ def test_generar_informe_produce_docx_valido(tmp_path):
             ],
         },
     ]
+    return rows_actual, rows_anterior
 
-    driver = _FakeDriver(
+
+def _construir_driver_informe_fixture() -> _FakeDriver:
+    """Driver falso con la cola de respuestas que espera _generar_informe:
+    resolver línea (periodo actual) + rows actual + rows anterior (línea
+    ya resuelta) + candidatos_sustitucion (máquina + candidatas)."""
+    rows_actual, rows_anterior = _construir_datos_informe_fixture()
+    return _FakeDriver(
         [
-            _FakeResult(single_valor={"id": "L1"}),  # _resolver_linea_id (periodo actual)
+            _FakeResult(single_valor={"id": "L1"}),
             _FakeResult(data_valor=rows_actual),
-            _FakeResult(data_valor=rows_anterior),  # linea_id ya resuelto, sin resolver de nuevo
-            _FakeResult(single_valor={"maquina": MAQUINA_M3}),  # candidatos_sustitucion: maquina
-            _FakeResult(data_valor=[{"candidata": CANDIDATA_C3}]),  # candidatos_sustitucion: candidatas
+            _FakeResult(data_valor=rows_anterior),
+            _FakeResult(single_valor={"maquina": MAQUINA_M3}),
+            _FakeResult(data_valor=[{"candidata": CANDIDATA_C3}]),
         ]
     )
+
+
+def _extraer_texto_completo(doc: Document) -> str:
+    """Todo el texto legible del docx: párrafos del cuerpo (doc.paragraphs
+    no incluye texto de dentro de tablas), celdas de las 3 tablas
+    (portada, tarjetas, KPIs), y el pie de página. No inspecciona las
+    gráficas (son imágenes, no texto)."""
+    partes = [p.text for p in doc.paragraphs]
+    for tabla in doc.tables:
+        for fila in tabla.rows:
+            partes.extend(celda.text for celda in fila.cells)
+    for section in doc.sections:
+        partes.extend(p.text for p in section.footer.paragraphs)
+    return "\n".join(partes)
+
+
+def test_generar_informe_produce_docx_valido(tmp_path):
+    driver = _construir_driver_informe_fixture()
 
     resultado = server._generar_informe(driver, "mensual", "2026-07-04", output_dir=tmp_path)
 
@@ -898,6 +928,7 @@ def test_generar_informe_produce_docx_valido(tmp_path):
     tabla_portada = doc.tables[0]
     tabla_tarjetas = doc.tables[1]
     tabla = next(t for t in doc.tables if len(t.columns) == 5)
+    assert len(tabla_portada.rows) == 1 and len(tabla_portada.columns) == 1
     assert len(tabla.rows) == 3  # cabecera + 2 estaciones
     assert len(tabla_tarjetas.columns) == 3
 
@@ -910,11 +941,7 @@ def test_generar_informe_produce_docx_valido(tmp_path):
     # el diagnóstico de "Cuello de botella" no se repite en "Recomendaciones"
     assert diagnostico_texto not in recomendaciones_texto
 
-    texto_completo = "\n".join(todos_los_parrafos)
-    for tabla_cualquiera in (tabla_portada, tabla_tarjetas, tabla):
-        for fila in tabla_cualquiera.rows:
-            texto_completo += "\n" + "\n".join(c.text for c in fila.cells)
-    texto_completo += "\n" + doc.sections[0].footer.paragraphs[0].text
+    texto_completo = _extraer_texto_completo(doc)
 
     # nombre legible, nunca el id interno de la máquina
     assert "M3" not in texto_completo
@@ -931,6 +958,46 @@ def test_generar_informe_produce_docx_valido(tmp_path):
     assert "9.500" in texto_completo  # unidades totales E3 (4800+4700)
     assert "14.100" in texto_completo  # unidades totales E4 (7000+7100)
     assert "23.600" in texto_completo  # unidades totales de la línea
+
+
+def test_generar_informe_contenido_sin_duplicacion_ids_ni_numeros_mal_formateados(tmp_path):
+    """Regresión de contenido, no solo de estructura: los 3 bugs reales
+    encontrados en este proyecto (texto duplicado entre diagnóstico y
+    recomendaciones, ids internos filtrados al texto de usuario, números
+    sin separador de miles) se detectaron abriendo el docx a mano — este
+    test los atrapa automáticamente."""
+    driver = _construir_driver_informe_fixture()
+
+    resultado = server._generar_informe(driver, "mensual", "2026-07-04", output_dir=tmp_path)
+    doc = Document(resultado.ruta)
+
+    # 1. el diagnóstico de "Cuello de botella" no se repite (ni total ni
+    # parcialmente) en ninguna frase de "Recomendaciones"
+    parrafos = [p.text for p in doc.paragraphs]
+    diagnostico = parrafos[parrafos.index("Cuello de botella") + 1]
+    recomendaciones = parrafos[parrafos.index("Recomendaciones") + 1 :]
+    for r in recomendaciones:
+        assert r != diagnostico
+        assert diagnostico not in r
+        assert r not in diagnostico
+
+    texto_completo = _extraer_texto_completo(doc)
+
+    # 2. ningún id interno (letra + número: M3, E2, C1...) en el texto de
+    # cara al usuario. linea_id ("L1") es la única excepción legítima: se
+    # muestra a propósito en la portada/pie de página, no es un id de
+    # máquina/estación/candidata filtrado por error. Confirmado leyendo
+    # _construir_documento: la tabla de KPIs usa estacion_nombre, nunca un
+    # id, así que no hace falta excluir ninguna tabla de este check.
+    ids_encontrados = [m for m in re.findall(r"\b[A-Z]\d+\b", texto_completo) if m != "L1"]
+    assert ids_encontrados == []
+
+    # 3. ningún número de 4+ cifras sin separador de miles en formato
+    # español. Se excluyen las fechas ISO (p.ej. "2026-07-04" en la
+    # portada) porque un año de 4 dígitos no lleva separador y daría un
+    # falso positivo.
+    texto_sin_fechas = re.sub(r"\d{4}-\d{2}-\d{2}", "", texto_completo)
+    assert re.findall(r"\b\d{4,}\b", texto_sin_fechas) == []
 
 
 def test_ejecutar_generar_informe_periodo_invalido_devuelve_error_estructurado():
