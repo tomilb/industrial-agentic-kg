@@ -1,6 +1,6 @@
 # Preguntas de evaluación del agente
 
-Checklist manual para la Semana 2. Para cada pregunta: anotar qué tool(s)
+Checklist manual para la Fase 2. Para cada pregunta: anotar qué tool(s)
 llamó el agente, si los datos citados coinciden con lo cargado en Neo4j, y
 si la respuesta es correcta. Un "no" en cualquiera de las tres columnas es
 un fallo a corregir antes de dar por cerrada la tool correspondiente.

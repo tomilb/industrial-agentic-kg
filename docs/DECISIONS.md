@@ -448,3 +448,31 @@ candidatos globales suficientes, o una pregunta legítima sobre una
 máquina podría no devolver nada si chunks de otras máquinas puntúan más
 alto en similitud bruta. Verificado con un test de integración dedicado
 (`test_consultar_manual_tecnico_no_mezcla_contenido_de_otra_maquina`).
+
+---
+
+## 2026-07 — Verificación del agente: checklist manual, no evals automatizados
+
+**Alternativas**: (a) checklist manual ejecutada a mano en Claude Desktop
+tras cambios relevantes (`docs/EVAL_QUESTIONS.md`), (b) un harness
+automatizado que llama a la API de Anthropic, con verificación
+determinista (tool llamada correcta, valores contra fixtures conocidos) y
+un segundo modelo como juez para las respuestas en lenguaje natural.
+
+**Decisión**: (a) para este MVP.
+
+**Motivo**: la opción (b) es la solución correcta cuando el volumen de
+preguntas de control o la frecuencia de cambios lo justifica — aquí no es
+el caso: ~15 preguntas, ejecutadas en momentos puntuales (tras cambios
+importantes, no en cada commit), representan poco tiempo manual. Construir
+y mantener un harness automatizado añadiría una dependencia de API con
+facturación propia (separada de cualquier suscripción de Claude.ai) y
+complejidad de mantenimiento (el juicio de un LLM no es determinista,
+así que un eval automatizado necesita su propio criterio de qué cuenta
+como "aprobado") para un beneficio marginal a esta escala.
+
+**Cuándo dejaría de ser la decisión correcta**: si el conjunto de
+preguntas creciera sustancialmente (soporte multi-línea, más tools), o si
+el proyecto pasara a tener cambios frecuentes de varias personas a la
+vez, donde revisar todo a mano deja de ser viable — en ese punto, la
+automatización sí pagaría su propio coste.

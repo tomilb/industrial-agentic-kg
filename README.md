@@ -179,6 +179,17 @@ y prueba con una pregunta real en una conversación nueva.
   incluye coste de instalación, parada de producción durante el cambio de
   máquina, ni ajuste de riesgo — válido para demostrar el razonamiento,
   no para una decisión de inversión real sin revisión adicional.
+- **Verificación del agente manual, no automatizada.** `docs/EVAL_QUESTIONS.md`
+  define ~15 preguntas de control (razonamiento financiero, cuellos de
+  botella, RAG) que se ejecutan a mano en Claude Desktop tras cambios
+  relevantes. La automatización natural sería un script contra la API de
+  Anthropic con dos niveles de verificación: determinista (¿se llamó a la
+  tool esperada? ¿coincide el valor con el fixture conocido?) y, para las
+  respuestas en lenguaje natural, un segundo modelo actuando de juez. Se
+  ha dejado manual deliberadamente para este MVP — con 15 preguntas
+  ejecutadas en momentos puntuales, el coste de mantener un harness
+  automatizado (y su facturación de API, separada de cualquier
+  suscripción) no compensa frente a revisarlas a mano.
 
 ## Roadmap
 
