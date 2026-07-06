@@ -20,3 +20,16 @@ FOR (c:MaquinaCandidata) REQUIRE c.id IS UNIQUE;
 // consultas por rango de fechas (p.ej. detectar_cuello_botella).
 CREATE INDEX registro_produccion_fecha_idx IF NOT EXISTS
 FOR (r:RegistroProduccion) ON (r.fecha);
+
+CREATE CONSTRAINT manual_chunk_id_unique IF NOT EXISTS
+FOR (mc:ManualChunk) REQUIRE mc.id IS UNIQUE;
+
+// 384 = dimensión de salida de paraphrase-multilingual-MiniLM-L12-v2
+// (ver graph/load_manuals.py) — si el modelo de embeddings cambia,
+// este número tiene que cambiar con él.
+CREATE VECTOR INDEX manual_chunk_embedding_idx IF NOT EXISTS
+FOR (mc:ManualChunk) ON (mc.embedding)
+OPTIONS {indexConfig: {
+  `vector.dimensions`: 384,
+  `vector.similarity_function`: 'cosine'
+}};

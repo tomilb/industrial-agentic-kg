@@ -57,7 +57,7 @@ Datos sintéticos (pandas)
    (Linea)-[:TIENE_ESTACION]->(Estacion)-[:OPERA]->(Maquina)
         │
         ▼
-   Servidor MCP — 4 tools (mcp-server/server.py)
+   Servidor MCP — 5 tools (mcp-server/server.py)
         │
         ▼
    Agente (Claude Desktop / API) ──► informe corporativo (docx)
@@ -68,7 +68,7 @@ es el cliente usado para desarrollo y demo, pero el mismo servidor es
 utilizable desde la API de Anthropic o cualquier otro cliente compatible
 con MCP, sin cambios.
 
-## Las 4 herramientas del agente
+## Las 5 herramientas del agente
 
 | Tool | Qué hace |
 |---|---|
@@ -76,6 +76,7 @@ con MCP, sin cambios.
 | `calcular_financiero` | Payback, ROI y VAN sobre una inversión propuesta |
 | `detectar_cuello_botella` | Identifica la estación restricción por capacidad efectiva (capacidad × OEE empírico del periodo), aplicando teoría de restricciones |
 | `generar_informe` | Informe de producción en docx con marca corporativa, KPIs, 3 gráficas y recomendaciones basadas en datos reales |
+| `consultar_manual_tecnico` | RAG sobre los manuales técnicos (mantenimiento, seguridad, instalación) con el índice vectorial nativo de Neo4j — sin base de datos vectorial aparte |
 
 Todas devuelven JSON validado con Pydantic; los errores siempre son
 estructurados (`{"error", "detalle"}`), nunca una excepción sin capturar.
@@ -90,8 +91,8 @@ Detalle completo en [`docs/ESCENARIO.md`](docs/ESCENARIO.md).
 
 ## Stack
 
-Python 3.11 · Neo4j 5.24 (Docker) · MCP Python SDK · Pydantic ·
-python-docx · matplotlib · pandas/numpy · pytest
+Python 3.11 · Neo4j 5.24 (Docker, índice vectorial nativo) · MCP Python SDK ·
+Pydantic · python-docx · matplotlib · sentence-transformers · pandas/numpy · pytest
 
 ## Metodología de desarrollo
 
@@ -127,6 +128,7 @@ docker compose up -d neo4j
 
 python data-gen/generate.py --stations 5 --days 180
 python graph/load_data.py
+python graph/load_manuals.py    # 1ª vez: descarga el modelo de embeddings (~460 MB, una sola vez)
 ```
 
 Conecta el servidor MCP a Claude Desktop siguiendo
@@ -190,9 +192,10 @@ y prueba con una pregunta real en una conversación nueva.
 ## Estructura del repo
 
 ```
-/mcp-server/       servidor MCP con las 4 tools + tests
-/graph/            esquema Cypher + carga idempotente a Neo4j
+/mcp-server/       servidor MCP con las 5 tools + tests
+/graph/            esquema Cypher + carga idempotente a Neo4j (datos y manuales)
 /data-gen/         generador de datos sintéticos de producción
+/manuales/         manuales técnicos por máquina (fuente del RAG de consultar_manual_tecnico)
 /skills/           skill de generación de informes (plantilla + lógica)
 /reports/output/   informes generados (no versionado el contenido)
 /docs/             arquitectura, decisiones, escenario, roadmap

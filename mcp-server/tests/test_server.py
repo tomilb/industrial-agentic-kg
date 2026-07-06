@@ -998,3 +998,92 @@ def test_ejecutar_generar_informe_periodo_invalido_devuelve_error_estructurado()
     resultado = server._ejecutar_generar_informe(_FakeDriver([]), "semanal", "2026-07-04")
 
     assert "periodo debe ser uno de" in resultado["error"]
+
+
+# --- consultar_manual_tecnico -------------------------------------------------
+
+
+class _VectorFalso:
+    """Simula el objeto que devuelve SentenceTransformer.encode() — solo
+    necesita soportar .tolist(), no hace falta numpy real en los tests."""
+
+    def __init__(self, valores):
+        self._valores = valores
+
+    def tolist(self):
+        return self._valores
+
+
+class _FakeModeloEmbeddings:
+    """Modelo de embeddings falso: nunca descarga ni carga nada real."""
+
+    def encode(self, texto, **kwargs):
+        return _VectorFalso([0.1, 0.2, 0.3])
+
+
+def test_consultar_manual_tecnico_ok():
+    filas = [
+        {"seccion": "Mantenimiento preventivo", "texto": "Limpieza de lentes...", "score": 0.91},
+        {
+            "seccion": "Incidencias conocidas",
+            "texto": "Falsos rechazos por suciedad...",
+            "score": 0.77,
+        },
+    ]
+    driver = _FakeDriver([_FakeResult(data_valor=filas)])
+
+    resultado = server._consultar_manual_tecnico(
+        driver, _FakeModeloEmbeddings(), "M3", "¿qué mantenimiento lleva el AOI?"
+    )
+
+    assert resultado.maquina_id == "M3"
+    assert len(resultado.chunks) == 2
+    assert resultado.chunks[0].seccion == "Mantenimiento preventivo"
+    assert resultado.chunks[0].score == 0.91
+
+
+def test_consultar_manual_tecnico_sin_resultados_devuelve_error():
+    driver = _FakeDriver([_FakeResult(data_valor=[])])
+
+    with pytest.raises(ValueError, match="No hay manual técnico"):
+        server._consultar_manual_tecnico(driver, _FakeModeloEmbeddings(), "M99", "¿algo?")
+
+
+def test_consultar_manual_tecnico_falta_maquina_id():
+    with pytest.raises(ValueError, match="Falta el parámetro 'maquina_id'"):
+        server._consultar_manual_tecnico(_FakeDriver([]), _FakeModeloEmbeddings(), "", "¿algo?")
+
+
+def test_consultar_manual_tecnico_falta_pregunta():
+    with pytest.raises(ValueError, match="Falta el parámetro 'pregunta'"):
+        server._consultar_manual_tecnico(_FakeDriver([]), _FakeModeloEmbeddings(), "M3", "")
+
+
+def test_ejecutar_consulta_manual_ok_devuelve_dict_serializable():
+    filas = [{"seccion": "Descripción general", "texto": "Sistema de inspección...", "score": 0.5}]
+    driver = _FakeDriver([_FakeResult(data_valor=filas)])
+
+    resultado = server._ejecutar_consulta_manual(
+        driver, _FakeModeloEmbeddings(), "M3", "¿qué es el AOI?"
+    )
+
+    assert isinstance(resultado, dict)
+    assert resultado["maquina_id"] == "M3"
+    assert resultado["chunks"][0]["seccion"] == "Descripción general"
+
+
+def test_ejecutar_consulta_manual_maquina_sin_manual_devuelve_error_estructurado():
+    driver = _FakeDriver([_FakeResult(data_valor=[])])
+
+    resultado = server._ejecutar_consulta_manual(driver, _FakeModeloEmbeddings(), "M99", "¿algo?")
+
+    assert "No hay manual técnico" in resultado["error"]
+
+
+def test_ejecutar_consulta_manual_excepcion_devuelve_error_estructurado():
+    resultado = server._ejecutar_consulta_manual(
+        _FakeDriverQueRompe(), _FakeModeloEmbeddings(), "M3", "¿algo?"
+    )
+
+    assert resultado["error"] == "Error al consultar el manual técnico"
+    assert "Neo4j no disponible" in resultado["detalle"]

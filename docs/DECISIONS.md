@@ -399,3 +399,52 @@ agente deba usar para razonar o calcular vive en el grafo, consultable de
 forma estructurada — los manuales/documentación son para el razonamiento
 humano sobre el propio proyecto, no para que el agente los lea en tiempo
 de ejecución.
+
+---
+
+## 2026-07 — `consultar_manual_tecnico`: embeddings locales (sentence-transformers) vs Voyage AI
+
+**Alternativas**: (a) embeddings locales con `sentence-transformers`
+(modelo descargado una vez, corre en CPU sin red), (b) una API de
+embeddings de pago (Voyage AI u otra).
+
+**Decisión**: (a), modelo `paraphrase-multilingual-MiniLM-L12-v2`
+(384 dim, multilingüe incl. español, probado de verdad antes de decidir:
+458 MB en caché, ~5,5s de carga ya cacheado, sin red).
+
+**Motivo**: sin API key ni dependencia de red en tiempo de ejecución tras
+la primera descarga — mismo espíritu que ya aplicamos al descartar
+`cairosvg` por dependencia de sistema (preferir soluciones
+autocontenidas), sin coste por consulta, y para un corpus de 40 chunks
+(10 manuales × 4 secciones) la calidad de un modelo multilingüe local ya
+es más que suficiente — una API de pago añadiría una dependencia real
+(red, coste, gestión de clave en `.env`) por una ganancia de calidad
+marginal en un corpus tan pequeño y acotado.
+
+**Coste aceptado, documentado sin ocultar**: `sentence-transformers`
+necesita `torch` como backend — ~530 MB instalados solo de `torch`, más
+~458 MB de pesos del modelo la primera vez que se ejecuta (descarga
+aparte de `pip install`). Es un salto real en el peso del proyecto frente
+al resto del stack. Se documenta el paso `python graph/load_manuals.py`
+en la secuencia de arranque de `README.md`/`CLAUDE.md` precisamente para
+que esa descarga ocurra en un momento explícito y esperado del setup, no
+como sorpresa en la primera pregunta al agente.
+
+**Chunking por sección, no por documento completo**: cada manual tiene
+~150-180 palabras en 4 secciones temáticamente distintas (descripción,
+mantenimiento/instalación, seguridad, incidencias/compatibilidad).
+Embeber el documento completo mezclaría en un solo vector temas
+distintos (p.ej. "mantenimiento" con "seguridad"), degradando la
+precisión de recuperación para preguntas específicas de una sección.
+Trocear más fino que por sección no aporta nada con secciones de ~40
+palabras ya autocontenidas — el grano correcto es el que ya marca la
+estructura `##` del propio documento, no hace falta un chunker por
+tokens/caracteres.
+
+**`K_CANDIDATOS_VECTOR = 50` en vez de pedir el top-N final directamente
+al índice**: `db.index.vector.queryNodes` no conoce `maquina_id` — el
+filtro por máquina tiene que aplicarse en Cypher *después* de traer
+candidatos globales suficientes, o una pregunta legítima sobre una
+máquina podría no devolver nada si chunks de otras máquinas puntúan más
+alto en similitud bruta. Verificado con un test de integración dedicado
+(`test_consultar_manual_tecnico_no_mezcla_contenido_de_otra_maquina`).

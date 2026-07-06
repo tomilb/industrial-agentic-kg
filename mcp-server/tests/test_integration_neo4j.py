@@ -26,23 +26,10 @@ from load_data import (
     cargar_precede_a,
     cargar_registros,
 )
-from testcontainers.neo4j import Neo4jContainer
 
-
-@pytest.fixture(scope="module")
-def neo4j_driver():
-    try:
-        container = Neo4jContainer("neo4j:5.24-community", password="test-password")
-        container.start()
-    except Exception as e:
-        pytest.skip(f"Docker no disponible para tests de integración: {e}")
-
-    driver = container.get_driver()
-    try:
-        yield driver
-    finally:
-        driver.close()
-        container.stop()
+# neo4j_driver es un fixture de sesión compartido, definido en conftest.py
+# (así lo reutilizan todos los ficheros de test de integración sin
+# arrancar un contenedor por fichero).
 
 
 def _cargar_fixture_minima(driver) -> None:
@@ -138,15 +125,35 @@ def _cargar_fixture_minima(driver) -> None:
     cargar_registros(driver, registros)
 
 
+# neo4j_driver es un fixture de SESIÓN compartido con otros ficheros de
+# test de integración (p.ej. test_integration_manual_tecnico.py, que
+# también usa L1 como id de línea) — contar por label a secas contaría
+# también los nodos de esos otros fixtures. Se filtra explícitamente por
+# los ids propios de este fixture (sin L1, que sí se comparte a
+# propósito) para que el conteo sea válido pase lo que pase en el resto
+# de la sesión.
+IDS_FIXTURE = ["E1", "E2", "M1", "M2", "C2"]
+
+
 def _contar_nodos_y_relaciones(driver) -> dict[str, Any]:
     with driver.session() as session:
         nodos = {
             r["tipo"]: r["n"]
-            for r in session.run("MATCH (n) RETURN labels(n)[0] AS tipo, count(*) AS n")
+            for r in session.run(
+                "MATCH (n) WHERE n.id IN $ids RETURN labels(n)[0] AS tipo, count(*) AS n",
+                ids=IDS_FIXTURE,
+            )
         }
         relaciones = {
             r["tipo"]: r["n"]
-            for r in session.run("MATCH ()-[rel]->() RETURN type(rel) AS tipo, count(*) AS n")
+            for r in session.run(
+                """
+                MATCH (a)-[rel]->(b)
+                WHERE a.id IN $ids OR b.id IN $ids
+                RETURN type(rel) AS tipo, count(*) AS n
+                """,
+                ids=IDS_FIXTURE,
+            )
         }
     return {**nodos, **relaciones}
 

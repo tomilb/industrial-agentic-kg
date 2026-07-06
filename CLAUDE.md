@@ -36,10 +36,12 @@ features extra. Alcance de MVP: 2-3 semanas.
 
 - Levantar Neo4j: `docker compose up -d neo4j`
 - Cargar esquema y datos: `python graph/load_data.py`
+- Cargar manuales técnicos (RAG): `python graph/load_manuals.py` (1ª vez
+  descarga el modelo de embeddings, ~460 MB)
 - Generar datos sintéticos: `python data-gen/generate.py --stations 5 --days 180`
 - Arrancar servidor MCP: `python mcp-server/server.py`
-- Tests: `pytest mcp-server/tests --ignore=mcp-server/tests/test_integration_neo4j.py`
-- Tests de integración (requieren Docker corriendo): `pytest mcp-server/tests/test_integration_neo4j.py -m integration`
+- Tests: `pytest mcp-server/tests --ignore-glob="mcp-server/tests/test_integration_*.py"`
+- Tests de integración (requieren Docker corriendo): `pytest mcp-server/tests -m integration`
 
 ## Convenciones
 
