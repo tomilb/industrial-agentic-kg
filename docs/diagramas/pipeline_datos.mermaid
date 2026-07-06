@@ -1,0 +1,33 @@
+```mermaid
+flowchart LR
+    subgraph Sintetico["Datos de producción"]
+        GEN["data-gen/generate.py<br/>SEED fijo, ruido gaussiano<br/>en disponibilidad/rendimiento/calidad"]
+        CSV["5 CSVs intermedios<br/>lineas · estaciones · maquinas<br/>candidatas · registros"]
+    end
+
+    subgraph Manual["Manuales técnicos"]
+        MD["manuales/*.md<br/>10 ficheros, frontmatter YAML"]
+        CHUNK["Chunking por sección<br/>(cada ## es una unidad)"]
+        EMB["sentence-transformers<br/>embeddings locales, 384 dim"]
+    end
+
+    subgraph Carga["Carga idempotente"]
+        LOAD["graph/load_data.py<br/>MERGE, nunca CREATE"]
+        LOADM["graph/load_manuals.py<br/>MERGE, id determinista"]
+    end
+
+    subgraph Neo4j["Neo4j"]
+        GRAFO[("Grafo de planta")]
+        VEC[("Índice vectorial<br/>manual_chunk_embedding_idx")]
+    end
+
+    MCP["Servidor MCP<br/>(5 tools)"]
+
+    GEN --> CSV --> LOAD --> GRAFO
+    MD --> CHUNK --> EMB --> LOADM
+    LOADM --> GRAFO
+    LOADM --> VEC
+
+    GRAFO --> MCP
+    VEC --> MCP
+```

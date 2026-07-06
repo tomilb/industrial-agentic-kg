@@ -1,0 +1,59 @@
+```mermaid
+erDiagram
+    LINEA ||--o{ ESTACION : TIENE_ESTACION
+    ESTACION ||--o| ESTACION : PRECEDE_A
+    ESTACION ||--|| MAQUINA : OPERA
+    MAQUINA ||--o{ MAQUINA_CANDIDATA : PUEDE_SUSTITUIRSE_POR
+    MAQUINA ||--o{ REGISTRO_PRODUCCION : REGISTRA
+    MAQUINA ||--o{ MANUAL_CHUNK : TIENE_MANUAL
+    MAQUINA_CANDIDATA ||--o{ MANUAL_CHUNK : TIENE_MANUAL
+
+    LINEA {
+        string id PK
+        string nombre
+    }
+    ESTACION {
+        string id PK
+        string linea_id FK
+        string nombre
+        int orden
+    }
+    MAQUINA {
+        string id PK
+        string estacion_id FK
+        string nombre
+        float capacidad_ud_h
+        float oee_actual
+        float coste_adquisicion
+        float coste_mantenimiento_anual
+        float consumo_kwh
+        int vida_util_anos
+        int anos_en_servicio
+    }
+    MAQUINA_CANDIDATA {
+        string id PK
+        string maquina_id FK
+        string nombre
+        float capacidad_ud_h
+        float coste_adquisicion
+        float coste_mantenimiento_anual
+        float consumo_kwh
+        int vida_util_anos
+        float mejora_capacidad_pct
+    }
+    REGISTRO_PRODUCCION {
+        string maquina_id FK
+        date fecha
+        int unidades
+        float tiempo_ciclo_s
+        float paradas_min
+        int defectos
+    }
+    MANUAL_CHUNK {
+        string id PK
+        string maquina_id FK
+        string seccion
+        string texto
+        vector embedding
+    }
+```

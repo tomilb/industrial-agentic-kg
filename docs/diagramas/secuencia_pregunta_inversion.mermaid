@@ -1,0 +1,35 @@
+```mermaid
+sequenceDiagram
+    actor U as Usuario
+    participant A as Agente (Claude)
+    participant G as consultar_grafo
+    participant B as detectar_cuello_botella
+    participant F as calcular_financiero
+    participant N as Neo4j
+
+    U->>A: ¿Si sustituyo el AOI por su candidata,<br/>cuánto mejora el throughput y<br/>cuándo recupero la inversión?
+
+    A->>G: candidatos_sustitucion("M3")
+    G->>N: MATCH (M3)-[:PUEDE_SUSTITUIRSE_POR]->(c)
+    N-->>G: C3: capacidad=650 ud/h,<br/>coste=150.000€
+    G-->>A: specs de M3 y C3
+
+    A->>B: detectar_cuello_botella("L1", últimos 30 días)
+    B->>N: capacidad_efectiva por estación<br/>(nominal × OEE empírico)
+    N-->>B: E3(AOI)=297,1 ud/h (restricción actual)
+    B-->>A: tras sustituir: nueva restricción<br/>E5(Test funcional)=410,7 ud/h
+
+    A->>U: Me faltan horas/día, margen €/ud<br/>y horizonte de evaluación
+    U->>A: 24h/día · 3€/ud · 8 años
+
+    A->>F: calcular_financiero(coste=150.000,<br/>cap_actual=297,1, cap_nueva=410,7, ...)
+    F-->>A: payback≈0,6 meses<br/>ROI≈15.820% · VAN≈15,77M€
+
+    A->>U: Throughput 297,1→410,7 ud/h (+38,2%)<br/>— no 650, E5 es el nuevo límite.<br/>Payback ~3 semanas. Aviso: asume<br/>demanda suficiente y mismo OEE en C3.
+```
+
+**Nota de procedencia**: este diagrama refleja una traza real, verificada en
+Claude Desktop el 2026-07-06 con las 5 tools ya en producción — no es una
+reconstrucción ilustrativa. Los números (297,1 / 410,7 ud/h, payback 0,6
+meses, ROI 15.820%) corresponden a esa ejecución concreta; pueden variar
+ligeramente en otra ejecución porque el dataset se regenera con ruido.
