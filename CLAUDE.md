@@ -26,7 +26,7 @@ features extra. Alcance de MVP: 2-3 semanas.
 ```
 /data-gen/       generador de datos sintéticos de producción
 /graph/          schema.cypher + load_data.py (carga a Neo4j)
-/mcp-server/     servidor MCP con las 4 tools (ver ARCHITECTURE.md)
+/mcp-server/     servidor MCP con las 5 tools (ver ARCHITECTURE.md)
 /reports/        plantilla corporativa + informes generados (Skills)
 /docs/           DECISIONS.md, ROADMAP.md
 /ARCHITECTURE.md esquema del grafo y contratos de las tools
